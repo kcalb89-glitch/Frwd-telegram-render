@@ -1,0 +1,33 @@
+/* Additional custom styles */
+.navbar-brand {
+    font-weight: bold;
+}
+.container {
+    margin-top: 30px;
+}
+.card {
+    margin-bottom: 20px;
+}
+.status-badge {
+    font-size: 0.9rem;
+    margin-left: 10px;
+}
+.filter-example {
+    background-color: var(--bs-dark);
+    padding: 5px 10px;
+    border-radius: 4px;
+    display: inline-block;
+    margin: 2px 0;
+}
+.quick-guide {
+    background-color: rgba(var(--bs-info-rgb), 0.15);
+    border-left: 4px solid var(--bs-info);
+    padding: 15px;
+    margin-bottom: 20px;
+}
+.setup-step {
+    margin-bottom: 10px;
+}
+.form-text {
+    color: var(--bs-secondary);
+}
