@@ -1,0 +1,128 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Configuration</h5>
+                <div>
+                    {% if is_running %}
+                    <form action="/stop" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-danger btn-sm">
+                            <i class="bi bi-stop-circle"></i> Stop Forwarder
+                        </button>
+                    </form>
+                    {% else %}
+                    <form action="/start" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-success btn-sm" {% if not config.is_valid() %}disabled{% endif %}>
+                            <i class="bi bi-play-circle"></i> Start Forwarder
+                        </button>
+                    </form>
+                    {% endif %}
+                    <form action="/reset-db" method="post" class="d-inline ms-2">
+                        <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('This will reset the message database. All messages will be forwarded again. Continue?')">
+                            <i class="bi bi-arrow-repeat"></i> Reset Message DB
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <div class="card-body">
+                <form action="/setup" method="post">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="api_id" class="form-label">Telegram API ID</label>
+                            <input type="text" class="form-control" id="api_id" name="api_id" value="{{ config.api_id or '' }}" required>
+                            <div class="form-text">Get from <a href="https://my.telegram.org" target="_blank">my.telegram.org</a></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="api_hash" class="form-label">Telegram API Hash</label>
+                            <input type="text" class="form-control" id="api_hash" name="api_hash" value="{{ config.api_hash or '' }}" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="source_channel" class="form-label">Source Channel</label>
+                            <input type="text" class="form-control" id="source_channel" name="source_channel" value="{{ config.source_channel or '' }}" required>
+                            <div class="form-text">Channel username or ID where messages will be forwarded from</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="destination_channel" class="form-label">Destination Channel</label>
+                            <input type="text" class="form-control" id="destination_channel" name="destination_channel" value="{{ config.destination_channel or '' }}" required>
+                            <div class="form-text">Channel username or ID where messages will be forwarded to</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="text_filters" class="form-label">Text Filters (comma-separated)</label>
+                        <textarea class="form-control" id="text_filters" name="text_filters" rows="3">{{ ','.join(filters) if filters else '' }}</textarea>
+                        <div class="form-text">
+                            Simple text to remove, regex patterns in /pattern/ format, or replacements like pattern->replacement
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="rate_limit_delay" class="form-label">Rate Limit Delay (seconds)</label>
+                        <input type="number" class="form-control" id="rate_limit_delay" name="rate_limit_delay" min="1" max="60" value="{{ config.rate_limit_delay or 3 }}">
+                        <div class="form-text">Delay between forwarding messages to avoid Telegram rate limits</div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Save Configuration</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Quick Guide</h5>
+            </div>
+            <div class="card-body">
+                <h6>Setup Steps:</h6>
+                <ol>
+                    <li>Get API ID and Hash from <a href="https://my.telegram.org" target="_blank">my.telegram.org</a></li>
+                    <li>Enter source and destination channel usernames or IDs</li>
+                    <li>Add any text filters you want to apply</li>
+                    <li>Save the configuration</li>
+                    <li>Start the forwarder</li>
+                </ol>
+                
+                <h6>Filter Examples:</h6>
+                <ul>
+                    <li><code>@username</code> - Remove all occurrences of @username</li>
+                    <li><code>/\d{10}/</code> - Remove all 10-digit numbers</li>
+                    <li><code>Buy->Purchase</code> - Replace "Buy" with "Purchase"</li>
+                </ul>
+                
+                <h6>Running 24/7:</h6>
+                <p>Use <code>nohup python app.py &</code> on your VPS to keep the forwarder running in the background.</p>
+                
+                <a href="/setup_guide.md" target="_blank" class="btn btn-outline-info mt-2">
+                    <i class="bi bi-book"></i> View Full Setup Guide
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // This script prevents the start button from being clicked if the config is invalid
+    function validateForm() {
+        const apiId = document.getElementById('api_id').value;
+        const apiHash = document.getElementById('api_hash').value;
+        const sourceChannel = document.getElementById('source_channel').value;
+        const destChannel = document.getElementById('destination_channel').value;
+        
+        const startButton = document.querySelector('button[type="submit"]');
+        if (!apiId || !apiHash || !sourceChannel || !destChannel) {
+            startButton.disabled = true;
+        } else {
+            startButton.disabled = false;
+        }
+    }
+</script>
+{% endblock %}
