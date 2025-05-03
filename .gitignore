@@ -1,0 +1,51 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Telegram session files
+*.session
+*.session-journal
+
+# Log files
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+
+# Temporary files
+tmp/
+.tmp/
+.DS_Store
+
+# Backups
+*.bak
+*.backup
+
+# Configuration that might contain sensitive data
+# (but keep the example files)
+config.json
+!config.json.example

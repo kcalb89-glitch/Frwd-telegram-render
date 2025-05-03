@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: telegram-forwarder
+    env: python
+    buildCommand: chmod +x setup_render.sh && ./setup_render.sh && pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "true"
+      - key: PORT
+        value: "10000"
+      # Keep logs in memory only since Render's filesystem is ephemeral
+      - key: LOG_LEVEL
+        value: "INFO"
+      # You'll need to add these in the Render dashboard as secrets
+      # - key: API_ID
+      #   sync: false
+      # - key: API_HASH
+      #   sync: false
+      # - key: SOURCE_CHANNEL
+      #   sync: false
+      # - key: DESTINATION_CHANNEL
+      #   sync: false
+      # - key: SESSION_STRING
+      #   sync: false
+    autoDeploy: true
+    healthCheckPath: /status
