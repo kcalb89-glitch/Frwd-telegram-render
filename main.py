@@ -3,7 +3,8 @@
 Telegram Message Forwarder - Main Entry Point
 This script initializes and runs the Telegram message forwarding system.
 """
-
+import threading
+from flask import Flask
 import os
 import sys
 import time
@@ -41,7 +42,15 @@ logging.basicConfig(
     handlers=handlers
 )
 logger = logging.getLogger(__name__)
-
+def run_web_server():
+    app = Flask(__name__)
+    
+    @app.route('/')
+    def home():
+        return "Bot is running"
+    
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
 async def main():
     """Main function that initializes and runs the forwarder"""
     # Parse command line arguments
@@ -111,6 +120,8 @@ async def main():
                 logger.info("Disconnected from Telegram")
 
 if __name__ == "__main__":
+    web_thread = threading.Thread(target=run_web_server, daemon=True)
+    web_thread.start()
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
