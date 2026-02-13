@@ -78,7 +78,7 @@ class TelegramForwarder:
                     dest_entity = await client.get_entity(PeerChannel(dest_id))
                 else:
                 # Simple group or chat
-                dest_entity = await client.get_entity(PeerChat(dest_id))
+                    dest_entity = await client.get_entity(PeerChat(dest_id))
                 logger.info(f"Successfully resolved destination channel: {getattr(dest_entity, 'title', dest_id)}")
                 
                 # Store the resolved entities
