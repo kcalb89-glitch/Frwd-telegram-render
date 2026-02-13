@@ -52,7 +52,7 @@ def run_web_server():
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
 async def main():
-        logger.info("Starting forwarder...")
+    logger.info("Starting forwarder...")
 
     # === Dialogs loading ===
     try:
