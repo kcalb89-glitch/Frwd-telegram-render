@@ -64,14 +64,21 @@ class TelegramForwarder:
                 dest_id = int(clean_dest)
                 
                 # Use the proper PeerChannel format
-                from telethon.tl.types import PeerChannel
+                from telethon.tl.types import PeerChannel, PeerChat
                 
                 # Get the source channel entity using ID
                 source_entity = await self.client.get_entity(PeerChannel(source_id))
                 logger.info(f"Successfully resolved source channel: {getattr(source_entity, 'title', source_id)}")
                 
                 # Get the destination channel entity using ID
-                dest_entity = await self.client.get_entity(PeerChannel(dest_id))
+                #dest_entity = await self.client.get_entity(PeerChannel(dest_id))
+                dest_id = int(os.environ.get('DESTINATION_CHANNEL'))
+                if dest_id < 0 and str(dest_id).startswith('-100'):
+                # Supergroup or channel
+                    dest_entity = await client.get_entity(PeerChannel(dest_id))
+                else:
+                # Simple group or chat
+                dest_entity = await client.get_entity(PeerChat(dest_id))
                 logger.info(f"Successfully resolved destination channel: {getattr(dest_entity, 'title', dest_id)}")
                 
                 # Store the resolved entities
