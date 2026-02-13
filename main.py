@@ -54,25 +54,6 @@ def run_web_server():
 async def main():
     logger.info("Starting forwarder...")
 
-    # === Dialogs loading ===
-    try:
-        logger.info("Check dialogs for cash...")
-        dialogs = await client.get_dialogs()
-        logger.info(f"✅ Dialogs: {len(dialogs)}")
-        
-        # Check groop id`s
-        dest_id = int(os.environ.get('DESTINATION_CHANNEL'))
-        try:
-            dest_entity = await client.get_entity(dest_id)
-            logger.info(f"✅ Целевая группа найдена: {getattr(dest_entity, 'title', 'N/A')}")
-        except Exception as e:
-            logger.error(f"❌ Не удалось найти группу с ID {dest_id} даже после get_dialogs: {e}")
-            # Print all dialogs for testing
-            logger.info("Dialogs:")
-            for dialog in dialogs:
-                logger.info(f"  - {dialog.name} (ID: {dialog.id})")
-    except Exception as e:
-        logger.error(f"Check dialogs fault: {e}")
     """Main function that initializes and runs the forwarder"""
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Telegram Message Forwarder')
@@ -110,7 +91,7 @@ async def main():
 
         logger.info("Connecting to Telegram...")
         await client.start()
-        
+     
         # Save session string for future use
         if not config.session_string:
             config.session_string = client.session.save()
@@ -127,7 +108,25 @@ async def main():
         logger.info("Forwarder is now running. Press Ctrl+C to stop.")
         while True:
             await asyncio.sleep(3600)  # Keep the script running
-            
+      # === Dialogs loading ===
+    try:
+        logger.info("Check dialogs for cash...")
+        dialogs = await client.get_dialogs()
+        logger.info(f"✅ Dialogs: {len(dialogs)}")
+        
+        # Check groop id`s
+        dest_id = int(os.environ.get('DESTINATION_CHANNEL'))
+        try:
+            dest_entity = await client.get_entity(dest_id)
+            logger.info(f"✅ Group not found: {getattr(dest_entity, 'title', 'N/A')}")
+        except Exception as e:
+            logger.error(f"❌ Can not find group with ID {dest_id} even after get_dialogs: {e}")
+            # Print all dialogs for testing
+            logger.info("Dialogs:")
+            for dialog in dialogs:
+                logger.info(f"  - {dialog.name} (ID: {dialog.id})")
+    except Exception as e:
+        logger.error(f"Check dialogs fault: {e}")          
     except KeyboardInterrupt:
         logger.info("Stopping forwarder due to keyboard interrupt...")
     except Exception as e:
