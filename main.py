@@ -52,6 +52,27 @@ def run_web_server():
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
 async def main():
+        logger.info("Starting forwarder...")
+
+    # === Dialogs loading ===
+    try:
+        logger.info("Check dialogs for cash...")
+        dialogs = await client.get_dialogs()
+        logger.info(f"✅ Dialogs: {len(dialogs)}")
+        
+        # Check groop id`s
+        dest_id = int(os.environ.get('DESTINATION_CHANNEL'))
+        try:
+            dest_entity = await client.get_entity(dest_id)
+            logger.info(f"✅ Целевая группа найдена: {getattr(dest_entity, 'title', 'N/A')}")
+        except Exception as e:
+            logger.error(f"❌ Не удалось найти группу с ID {dest_id} даже после get_dialogs: {e}")
+            # Print all dialogs for testing
+            logger.info("Dialogs:")
+            for dialog in dialogs:
+                logger.info(f"  - {dialog.name} (ID: {dialog.id})")
+    except Exception as e:
+        logger.error(f"Check dialogs fault: {e}")
     """Main function that initializes and runs the forwarder"""
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Telegram Message Forwarder')
