@@ -108,7 +108,12 @@ async def main():
         logger.info("Forwarder is now running. Press Ctrl+C to stop.")
         while True:
             await asyncio.sleep(3600)  # Keep the script running
-      # === Dialogs loading ===
+           
+    except KeyboardInterrupt:
+        logger.info("Stopping forwarder due to keyboard interrupt...")
+    except Exception as e:
+        logger.error(f"An error occurred: {str(e)}", exc_info=True)
+       # === Dialogs loading ===
     try:
         logger.info("Check dialogs for cash...")
         dialogs = await client.get_dialogs()
@@ -126,11 +131,7 @@ async def main():
             for dialog in dialogs:
                 logger.info(f"  - {dialog.name} (ID: {dialog.id})")
     except Exception as e:
-        logger.error(f"Check dialogs fault: {e}")          
-    except KeyboardInterrupt:
-        logger.info("Stopping forwarder due to keyboard interrupt...")
-    except Exception as e:
-        logger.error(f"An error occurred: {str(e)}", exc_info=True)
+        logger.error(f"Check dialogs fault: {e}")  
     finally:
         # Handle client variable in a way that satisfies type checking
         if 'client' in locals():
