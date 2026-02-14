@@ -36,120 +36,62 @@ class TelegramForwarder:
         self.dest_id = None
 
     async def start_forwarding(self):
-        """Start forwarding messages from source to destination"""
         if self.running:
             logger.warning("Forwarder is already running")
             return
-            
+
         self.running = True
         logger.info(f"Starting to forward messages from {self.config.source_channel} to {self.config.destination_channel}")
-        
-        # Try to get the actual chat entities to avoid errors
+
+    # --- Разрешение source и destination ---
+        source_raw = self.config.source_channel.strip()
+        dest_raw = self.config.destination_channel.strip()
+
         try:
-            # Try to handle channel IDs in different formats
-            try:
-                # Remove any potential hyphens in the IDs
-                clean_source = self.config.source_channel.strip()
-                if clean_source.startswith('-100'):
-                    # Already in proper format, remove the -100 prefix
-                    clean_source = clean_source[4:]
-                
-                clean_dest = self.config.destination_channel.strip()
-                if clean_dest.startswith('-100'):
-                    # Already in proper format, remove the -100 prefix
-                    clean_dest = clean_dest[4:]
-                
-                # Convert to integers to handle potential errors
-                source_id = int(clean_source)
-                dest_id = int(clean_dest)
-                
-                # Use the proper PeerChannel format
-                from telethon.tl.types import PeerChannel, PeerChat
-                
-                # Get the source channel entity using ID
-                source_entity = await self.client.get_entity(PeerChannel(source_id))
-                logger.info(f"Successfully resolved source channel: {getattr(source_entity, 'title', source_id)}")
-                
-                # Get the destination channel entity using ID
-                #dest_entity = await self.client.get_entity(PeerChannel(dest_id))
-                dest_id = int(os.environ.get('DESTINATION_CHANNEL'))
-                if dest_id < 0 and str(dest_id).startswith('-100'):
-                # Supergroup or channel
-                    dest_entity = await client.get_entity(PeerChannel(dest_id))
-                else:
-                # Simple group or chat
-                    dest_entity = await client.get_entity(PeerChat(dest_id))
-                logger.info(f"Successfully resolved destination channel: {getattr(dest_entity, 'title', dest_id)}")
-                
-                # Store the resolved entities
-                self.source_id = source_entity.id
-                self.dest_id = dest_entity.id
-                
-            except ValueError:
-                # Try using the raw string if the channel ID parsing didn't work
-                # This will handle usernames - with or without @ prefix
-                source_channel = self.config.source_channel
-                # Handle t.me links
-                if source_channel.startswith('https://t.me/') or source_channel.startswith('t.me/'):
-                    if source_channel.startswith('https://t.me/'):
-                        source_channel = '@' + source_channel[13:]  # Extract username after https://t.me/
+        # Функция для получения entity из строки
+            async def resolve_entity(raw: str):
+            # Попробуем интерпретировать как числовой ID
+                try:
+                    id_val = int(raw)
+                # В зависимости от формата ID выбираем правильный Peer
+                    if id_val < 0:
+                        if str(id_val).startswith('-100'):
+                            from telethon.tl.types import PeerChannel
+                            return await self.client.get_entity(PeerChannel(id_val))
+                        else:
+                            from telethon.tl.types import PeerChat
+                            return await self.client.get_entity(PeerChat(id_val))
                     else:
-                        source_channel = '@' + source_channel[5:]   # Extract username after t.me/
-                    # Remove any trailing parameters or path components
-                    if '/' in source_channel:
-                        source_channel = source_channel.split('/')[0]
-                # Handle regular usernames (add @ if missing)
-                elif not source_channel.startswith('@') and not source_channel.startswith('https://'):
-                    # If it doesn't start with @ and isn't a URL, add @ for username format
-                    if source_channel.isalnum() or '_' in source_channel:
-                        source_channel = '@' + source_channel
-                
-                # Do the same for destination channel
-                dest_channel = self.config.destination_channel
-                # Handle t.me links for destination
-                if dest_channel.startswith('https://t.me/') or dest_channel.startswith('t.me/'):
-                    if dest_channel.startswith('https://t.me/'):
-                        dest_channel = '@' + dest_channel[13:]  # Extract username after https://t.me/
+                    # Положительное число – возможно, пользователь, но для каналов редкость
+                        return await self.client.get_entity(id_val)
+                except ValueError:
+                # Не число – обрабатываем как username или ссылку
+                # Убираем лишние части, если это t.me ссылка
+                    if raw.startswith('https://t.me/'):
+                        username = raw[13:].split('/')[0]
+                    elif raw.startswith('t.me/'):
+                        username = raw[5:].split('/')[0]
                     else:
-                        dest_channel = '@' + dest_channel[5:]   # Extract username after t.me/
-                    # Remove any trailing parameters or path components
-                    if '/' in dest_channel:
-                        dest_channel = dest_channel.split('/')[0]
-                # Handle regular usernames (add @ if missing)
-                elif not dest_channel.startswith('@') and not dest_channel.startswith('https://'):
-                    # If it doesn't start with @ and isn't a URL, add @ for username format
-                    if dest_channel.isalnum() or '_' in dest_channel:
-                        dest_channel = '@' + dest_channel
-                
-                # Get channel entities
-                source_entity = await self.client.get_entity(source_channel)
-                dest_entity = await self.client.get_entity(dest_channel)
-                
-                # Log information about the channels including username if available
-                source_info = f"title: '{getattr(source_entity, 'title', 'Unknown')}'"
-                if hasattr(source_entity, 'username') and source_entity.username:
-                    source_info += f", username: @{source_entity.username}"
-                logger.info(f"Successfully resolved source channel: {source_info}")
-                
-                dest_info = f"title: '{getattr(dest_entity, 'title', 'Unknown')}'"
-                if hasattr(dest_entity, 'username') and dest_entity.username:
-                    dest_info += f", username: @{dest_entity.username}"
-                logger.info(f"Successfully resolved destination channel: {dest_info}")
-                
-                # Store the resolved entity IDs
-                self.source_id = source_entity.id
-                self.dest_id = dest_entity.id
-                
+                        username = raw
+                # Добавляем @, если нет
+                    if not username.startswith('@'):
+                        username = '@' + username
+                    return await self.client.get_entity(username)
+
+        # Получаем сущности
+            source_entity = await resolve_entity(source_raw)
+            dest_entity = await resolve_entity(dest_raw)
+
+        # Логируем результат
+            logger.info(f"Resolved source: {getattr(source_entity, 'title', source_entity.id)} (ID: {source_entity.id})")
+            logger.info(f"Resolved destination: {getattr(dest_entity, 'title', dest_entity.id)} (ID: {dest_entity.id})")
+
+            self.source_id = source_entity.id
+            self.dest_id = dest_entity.id
+
         except Exception as e:
-            logger.error(f"Error resolving channels: {str(e)}")
-            logger.error("Make sure you have joined both the source and destination channels.")
-            logger.error("For private channels, your account must be a member of the channel.")
-            logger.error("You can specify channels in several formats:")
-            logger.error("1. Channel ID with -100 prefix: -1001234567890")
-            logger.error("2. Channel ID without prefix: 1234567890")
-            logger.error("3. Channel username with @: @channel_name")
-            logger.error("4. Channel username without @: channel_name")
-            logger.error("5. Channel invite link: https://t.me/channel_name")
+            logger.error(f"Error resolving channels: {e}", exc_info=True)  # ← теперь виден traceback
+            logger.error("Make sure your account is a member of both chats and the identifiers are correct.")
             self.running = False
             return
             
