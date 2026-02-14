@@ -57,7 +57,7 @@ class TelegramForwarder:
                 logger.info("--- Конец списка ---")
             except Exception as e:
                 logger.error(f"Error listing dialogs: {e}")
-             logger.info("Dialogs fetched successfully.")
+            logger.info("Dialogs fetched successfully.")
         except Exception as e:
             logger.warning(f"Could not fetch dialogs: {e}")
 
