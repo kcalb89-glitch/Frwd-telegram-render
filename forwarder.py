@@ -43,46 +43,54 @@ class TelegramForwarder:
         self.running = True
         logger.info(f"Starting to forward messages from {self.config.source_channel} to {self.config.destination_channel}")
 
-    # --- Разрешение source и destination ---
+    # --- Загружаем диалоги для заполнения кеша ---
+        logger.info("Fetching all dialogs to populate cache...")
+        try:
+            await self.client.get_dialogs()
+            logger.info("Dialogs fetched successfully.")
+        except Exception as e:
+            logger.warning(f"Could not fetch dialogs: {e}")
+
         source_raw = self.config.source_channel.strip()
         dest_raw = self.config.destination_channel.strip()
 
-        try:
-        # Функция для получения entity из строки
-            async def resolve_entity(raw: str):
-            # Попробуем интерпретировать как числовой ID
+        async def resolve_entity(raw: str):
+        # Внутренняя функция с повторной попыткой
+            async def _get_entity(identifier):
                 try:
-                    id_val = int(raw)
-                # В зависимости от формата ID выбираем правильный Peer
-                    if id_val < 0:
-                        if str(id_val).startswith('-100'):
-                            from telethon.tl.types import PeerChannel
-                            return await self.client.get_entity(PeerChannel(id_val))
-                        else:
-                            from telethon.tl.types import PeerChat
-                            return await self.client.get_entity(PeerChat(id_val))
-                    else:
-                    # Положительное число – возможно, пользователь, но для каналов редкость
-                        return await self.client.get_entity(id_val)
-                except ValueError:
-                # Не число – обрабатываем как username или ссылку
-                # Убираем лишние части, если это t.me ссылка
-                    if raw.startswith('https://t.me/'):
-                        username = raw[13:].split('/')[0]
-                    elif raw.startswith('t.me/'):
-                        username = raw[5:].split('/')[0]
-                    else:
-                        username = raw
-                # Добавляем @, если нет
-                    if not username.startswith('@'):
-                        username = '@' + username
-                    return await self.client.get_entity(username)
+                    return await self.client.get_entity(identifier)
+                except KeyError:
+                    logger.info(f"Entity {identifier} not in cache, refreshing dialogs...")
+                    await self.client.get_dialogs()
+                    return await self.client.get_entity(identifier)
 
-        # Получаем сущности
+            try:
+                id_val = int(raw)
+                if id_val < 0:
+                    if str(id_val).startswith('-100'):
+                        from telethon.tl.types import PeerChannel
+                        return await _get_entity(PeerChannel(id_val))
+                    else:
+                        from telethon.tl.types import PeerChat
+                        return await _get_entity(PeerChat(id_val))
+                else:
+                    return await _get_entity(id_val)
+            except ValueError:
+            # Обработка username/ссылок (без изменений)
+                if raw.startswith('https://t.me/'):
+                    username = raw[13:].split('/')[0]
+                elif raw.startswith('t.me/'):
+                    username = raw[5:].split('/')[0]
+                else:
+                    username = raw
+                if not username.startswith('@'):
+                    username = '@' + username
+                return await _get_entity(username)
+
+        try:
             source_entity = await resolve_entity(source_raw)
             dest_entity = await resolve_entity(dest_raw)
 
-        # Логируем результат
             logger.info(f"Resolved source: {getattr(source_entity, 'title', source_entity.id)} (ID: {source_entity.id})")
             logger.info(f"Resolved destination: {getattr(dest_entity, 'title', dest_entity.id)} (ID: {dest_entity.id})")
 
@@ -90,7 +98,7 @@ class TelegramForwarder:
             self.dest_id = dest_entity.id
 
         except Exception as e:
-            logger.error(f"Error resolving channels: {e}", exc_info=True)  # ← теперь виден traceback
+            logger.error(f"Error resolving channels: {e}", exc_info=True)
             logger.error("Make sure your account is a member of both chats and the identifiers are correct.")
             self.running = False
             return
