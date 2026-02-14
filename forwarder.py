@@ -172,25 +172,21 @@ class TelegramForwarder:
         
         # Apply text filters if there's text in the message
         # Safely access attributes that might not exist
+        # Получаем текст сообщения (обычный текст или подпись к медиа)
         message_text = ""
         if hasattr(message, 'text') and message.text:
             message_text = message.text
         elif hasattr(message, 'caption') and message.caption:
             message_text = message.caption
-            
-        if message_text:
-            # Apply text filters
-            filtered_text = self.filter_manager.apply_filters(message_text)
-            
-            if filtered_text != message_text:
-                logger.info(f"Text filtered for message {message.id}")
-                # If the text was completely filtered out and there's no media, skip the message
-                if not filtered_text and not message.media:
-                    logger.info(f"Message {message.id} filtered out completely. Skipping.")
-                    self.tracker.mark_as_forwarded(message.id)
-                    return
-        else:
-            filtered_text = message_text
+
+        # Применяем фильтрацию по ключевым словам
+        if not self.filter_manager.contains_keyword(message_text):
+            logger.info(f"Message {message.id} does not contain any keywords. Skipping.")
+            self.tracker.mark_as_forwarded(message.id)
+            return
+
+        # Если текст есть и содержит ключевые слова, используем его без изменений
+        filtered_text = message_text
             
         try:
             # Handle different message types with more robust detection
