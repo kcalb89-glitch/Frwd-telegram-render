@@ -67,23 +67,31 @@ class TelegramForwarder:
         async def resolve_entity(identifier: str):
             """Resolve entity from string (ID, username, link)"""
             from telethon.tl.types import PeerChannel, PeerChat
-    
-        # Пробуем интерпретировать как число
+
+            # Пробуем интерпретировать как число
             try:
                 id_val = int(identifier)
-            # Определяем тип чата по ID
-                if id_val < 0:
-                    if str(id_val).startswith('-100'):
-                    # Супергруппа или канал
-                        return await self.client.get_entity(PeerChannel(id_val))
-                    else:
-                    # Обычная группа
-                        return await self.client.get_entity(PeerChat(id_val))
-                else:
-                # Положительное число — возможно пользователь или канал с положительным ID
+                # Сначала пробуем прямой вызов get_entity с числом
+                try:
                     return await self.client.get_entity(id_val)
+                except Exception:
+                    # Если не сработало, пробуем варианты с Peer
+                    if id_val < 0:
+                        if str(id_val).startswith('-100'):
+                            # Супергруппа или канал
+                            return await self.client.get_entity(PeerChannel(id_val))
+                        else:
+                            # Обычная группа — пробуем положительный ID
+                            logger.info(f"Trying positive ID {abs(id_val)} for group {id_val}")
+                            return await self.client.get_entity(abs(id_val))
+                    else:
+                        # Положительное число: возможно, группа или пользователь
+                        try:
+                            return await self.client.get_entity(PeerChat(id_val))
+                        except:
+                            return await self.client.get_entity(id_val)
             except ValueError:
-            # Не число — обрабатываем как username или ссылку
+                # Не число — обрабатываем как username или ссылку
                 channel = identifier
                 if channel.startswith('https://t.me/'):
                     channel = '@' + channel[13:].split('/')[0]
