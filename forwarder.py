@@ -55,7 +55,7 @@ class TelegramForwarder:
         dest_raw = self.config.destination_channel.strip()
 
         async def resolve_entity(identifier: str):
-        """Resolve entity from string (ID, username, link)"""
+            """Resolve entity from string (ID, username, link)"""
             from telethon.tl.types import PeerChannel, PeerChat
     
         # Пробуем интерпретировать как число
