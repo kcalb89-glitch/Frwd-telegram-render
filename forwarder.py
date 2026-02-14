@@ -104,7 +104,8 @@ class TelegramForwarder:
         try:
             source_entity = await resolve_entity(source_raw)
             dest_entity = await resolve_entity(dest_raw)
-
+            self.source_entity = source_entity
+            self.dest_entity = dest_entity
         # Логируем результат
             source_info = f"title: '{getattr(source_entity, 'title', 'Unknown')}'"
             if hasattr(source_entity, 'username') and source_entity.username:
@@ -291,10 +292,14 @@ class TelegramForwarder:
             logger.debug(traceback.format_exc())
     
     async def _forward_standard(self, message, filtered_text):
+        logger.info(f"Destination entity: {getattr(self, 'dest_entity', None)}")
+        logger.info(f"Destination ID from config: {self.config.destination_channel}")
         """Forward a message without special handling"""
         # Use the resolved destination id if available
-        destination = getattr(self, 'dest_id', self.config.destination_channel)
-        
+        destination = getattr(self, 'dest_entity', None)
+        if destination is None:
+            destination = self.config.destination_channel
+        logger.info(f"Sending to destination: {destination} (type: {type(destination)})")
         # Safely check if text is present and was filtered
         has_text = hasattr(message, 'text') and message.text
         has_caption = hasattr(message, 'caption') and message.caption
@@ -467,8 +472,12 @@ class TelegramForwarder:
     async def _forward_with_replacement(self, message, filtered_text):
         """Forward a message with the image replaced by our replacement image - The Billionaire AI Bot image"""
         # Use the resolved destination id if available
-        destination = getattr(self, 'dest_id', self.config.destination_channel)
-        
+        logger.info(f"Destination entity: {getattr(self, 'dest_entity', None)}")
+        logger.info(f"Destination ID from config: {self.config.destination_channel}")
+        destination = getattr(self, 'dest_entity', None)
+        if destination is None:
+            destination = self.config.destination_channel
+        logger.info(f"Sending to destination: {destination} (type: {type(destination)})")
         try:
             # IMPORTANT: Always hardcode the PNG path to ensure we use the right image
             fixed_image_path = 'replacement_image.png'
