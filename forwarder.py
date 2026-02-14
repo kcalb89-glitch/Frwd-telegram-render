@@ -36,105 +36,73 @@ class TelegramForwarder:
         self.dest_id = None
 
     async def start_forwarding(self):
-        """Start forwarding messages from source to destination"""
         if self.running:
             logger.warning("Forwarder is already running")
             return
-            
+
         self.running = True
         logger.info(f"Starting to forward messages from {self.config.source_channel} to {self.config.destination_channel}")
-        
-        # Try to get the actual chat entities to avoid errors
+
+    # Загружаем все диалоги, чтобы заполнить кеш Telethon
         try:
-            # Try to handle channel IDs in different formats
-            try:
-                # Remove any potential hyphens in the IDs
-                clean_source = self.config.source_channel.strip()
-                if clean_source.startswith('-100'):
-                    # Already in proper format, remove the -100 prefix
-                    clean_source = clean_source[4:]
-                
-                clean_dest = self.config.destination_channel.strip()
-                if clean_dest.startswith('-100'):
-                    # Already in proper format, remove the -100 prefix
-                    clean_dest = clean_dest[4:]
-                
-                # Convert to integers to handle potential errors
-                source_id = int(clean_source)
-                dest_id = int(clean_dest)
-                
-                # Use the proper PeerChannel format
-                from telethon.tl.types import PeerChannel
-                
-                # Get the source channel entity using ID
-                source_entity = await self.client.get_entity(PeerChannel(source_id))
-                logger.info(f"Successfully resolved source channel: {getattr(source_entity, 'title', source_id)}")
-                
-                # Get the destination channel entity using ID
-                dest_entity = await self.client.get_entity(PeerChannel(dest_id))
-                logger.info(f"Successfully resolved destination channel: {getattr(dest_entity, 'title', dest_id)}")
-                
-                # Store the resolved entities
-                self.source_id = source_entity.id
-                self.dest_id = dest_entity.id
-                
-            except ValueError:
-                # Try using the raw string if the channel ID parsing didn't work
-                # This will handle usernames - with or without @ prefix
-                source_channel = self.config.source_channel
-                # Handle t.me links
-                if source_channel.startswith('https://t.me/') or source_channel.startswith('t.me/'):
-                    if source_channel.startswith('https://t.me/'):
-                        source_channel = '@' + source_channel[13:]  # Extract username after https://t.me/
-                    else:
-                        source_channel = '@' + source_channel[5:]   # Extract username after t.me/
-                    # Remove any trailing parameters or path components
-                    if '/' in source_channel:
-                        source_channel = source_channel.split('/')[0]
-                # Handle regular usernames (add @ if missing)
-                elif not source_channel.startswith('@') and not source_channel.startswith('https://'):
-                    # If it doesn't start with @ and isn't a URL, add @ for username format
-                    if source_channel.isalnum() or '_' in source_channel:
-                        source_channel = '@' + source_channel
-                
-                # Do the same for destination channel
-                dest_channel = self.config.destination_channel
-                # Handle t.me links for destination
-                if dest_channel.startswith('https://t.me/') or dest_channel.startswith('t.me/'):
-                    if dest_channel.startswith('https://t.me/'):
-                        dest_channel = '@' + dest_channel[13:]  # Extract username after https://t.me/
-                    else:
-                        dest_channel = '@' + dest_channel[5:]   # Extract username after t.me/
-                    # Remove any trailing parameters or path components
-                    if '/' in dest_channel:
-                        dest_channel = dest_channel.split('/')[0]
-                # Handle regular usernames (add @ if missing)
-                elif not dest_channel.startswith('@') and not dest_channel.startswith('https://'):
-                    # If it doesn't start with @ and isn't a URL, add @ for username format
-                    if dest_channel.isalnum() or '_' in dest_channel:
-                        dest_channel = '@' + dest_channel
-                
-                # Get channel entities
-                source_entity = await self.client.get_entity(source_channel)
-                dest_entity = await self.client.get_entity(dest_channel)
-                
-                # Log information about the channels including username if available
-                source_info = f"title: '{getattr(source_entity, 'title', 'Unknown')}'"
-                if hasattr(source_entity, 'username') and source_entity.username:
-                    source_info += f", username: @{source_entity.username}"
-                logger.info(f"Successfully resolved source channel: {source_info}")
-                
-                dest_info = f"title: '{getattr(dest_entity, 'title', 'Unknown')}'"
-                if hasattr(dest_entity, 'username') and dest_entity.username:
-                    dest_info += f", username: @{dest_entity.username}"
-                logger.info(f"Successfully resolved destination channel: {dest_info}")
-                
-                # Store the resolved entity IDs
-                self.source_id = source_entity.id
-                self.dest_id = dest_entity.id
-                
+            logger.info("Fetching all dialogs to populate cache...")
+            await self.client.get_dialogs()
+            logger.info("Dialogs fetched successfully.")
         except Exception as e:
-            logger.error(f"Error resolving channels: {str(e)}")
+            logger.warning(f"Could not fetch dialogs: {e}")
+
+        source_raw = self.config.source_channel.strip()
+        dest_raw = self.config.destination_channel.strip()
+
+        async def resolve_entity(identifier: str):
+        """Resolve entity from string (ID, username, link)"""
+            from telethon.tl.types import PeerChannel, PeerChat
+    
+        # Пробуем интерпретировать как число
+            try:
+                id_val = int(identifier)
+            # Определяем тип чата по ID
+                if id_val < 0:
+                    if str(id_val).startswith('-100'):
+                    # Супергруппа или канал
+                        return await self.client.get_entity(PeerChannel(id_val))
+                    else:
+                    # Обычная группа
+                        return await self.client.get_entity(PeerChat(id_val))
+                else:
+                # Положительное число — возможно пользователь или канал с положительным ID
+                    return await self.client.get_entity(id_val)
+            except ValueError:
+            # Не число — обрабатываем как username или ссылку
+                channel = identifier
+                if channel.startswith('https://t.me/'):
+                    channel = '@' + channel[13:].split('/')[0]
+                elif channel.startswith('t.me/'):
+                    channel = '@' + channel[5:].split('/')[0]
+                elif not channel.startswith('@') and not channel.startswith('https://'):
+                    channel = '@' + channel
+                return await self.client.get_entity(channel)
+
+        try:
+            source_entity = await resolve_entity(source_raw)
+            dest_entity = await resolve_entity(dest_raw)
+
+        # Логируем результат
+            source_info = f"title: '{getattr(source_entity, 'title', 'Unknown')}'"
+            if hasattr(source_entity, 'username') and source_entity.username:
+                source_info += f", username: @{source_entity.username}"
+            logger.info(f"Successfully resolved source channel: {source_info} (ID: {source_entity.id})")
+
+            dest_info = f"title: '{getattr(dest_entity, 'title', 'Unknown')}'"
+            if hasattr(dest_entity, 'username') and dest_entity.username:
+                dest_info += f", username: @{dest_entity.username}"
+            logger.info(f"Successfully resolved destination channel: {dest_info} (ID: {dest_entity.id})")
+
+            self.source_id = source_entity.id
+            self.dest_id = dest_entity.id
+
+        except Exception as e:
+            logger.error(f"Error resolving channels: {e}")
             logger.error("Make sure you have joined both the source and destination channels.")
             logger.error("For private channels, your account must be a member of the channel.")
             logger.error("You can specify channels in several formats:")
@@ -145,31 +113,23 @@ class TelegramForwarder:
             logger.error("5. Channel invite link: https://t.me/channel_name")
             self.running = False
             return
-            
-        # Register the event handler for new messages using resolved entity
+
+    # Регистрация обработчика событий
         logger.info(f"Setting up event handler for source channel: {source_entity.id}")
-        
         @self.client.on(events.NewMessage(chats=source_entity))
         async def on_new_message(event):
+        # ... остальной код (без изменений, как в вашем файле)
+        # Вставьте сюда код обработчика из вашего исходного файла, начиная с try:
             try:
                 logger.info(f"New message detected: {event.message.id}")
-                
-                # Check if message was already forwarded
                 if self.tracker.is_forwarded(event.message.id):
                     logger.info(f"Message {event.message.id} was already forwarded. Skipping.")
                     return
-                
-                # Apply rate limiting to avoid flood errors
                 await self._apply_rate_limit()
-                
-                # Process and forward the message
                 logger.info(f"Processing message {event.message.id} for forwarding")
                 await self._forward_message(event)
-                
-                # Update the last message time
                 self.last_message_time = datetime.now()
                 logger.info(f"Successfully processed message {event.message.id}")
-                
             except FloodWaitError as e:
                 logger.warning(f"Rate limit hit. Sleeping for {e.seconds} seconds")
                 await asyncio.sleep(e.seconds)
