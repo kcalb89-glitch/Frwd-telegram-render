@@ -54,7 +54,7 @@ class TelegramForwarder:
                     entity = dialog.entity
                     name = getattr(entity, 'title', getattr(entity, 'first_name', 'Unknown'))
                     logger.info(f"Chat: {name} (ID: {entity.id})")
-                 logger.info("--- Конец списка ---")
+                logger.info("--- Конец списка ---")
              except Exception as e:
                  logger.error(f"Error listing dialogs: {e}")
              logger.info("Dialogs fetched successfully.")
