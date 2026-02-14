@@ -47,17 +47,17 @@ class TelegramForwarder:
         try:
             logger.info("Fetching all dialogs to populate cache...")
             await self.client.get_dialogs()
-                try:
-                    logger.info("--- Список всех доступных диалогов ---")
-                    dialogs = await self.client.get_dialogs()
-                    for dialog in dialogs:
-                        entity = dialog.entity
-                        name = getattr(entity, 'title', getattr(entity, 'first_name', 'Unknown'))
-                        logger.info(f"Chat: {name} (ID: {entity.id})")
-                    logger.info("--- Конец списка ---")
-                except Exception as e:
-                    logger.error(f"Error listing dialogs: {e}")
-                logger.info("Dialogs fetched successfully.")
+            try:
+                logger.info("--- Список всех доступных диалогов ---")
+                dialogs = await self.client.get_dialogs()
+                for dialog in dialogs:
+                    entity = dialog.entity
+                    name = getattr(entity, 'title', getattr(entity, 'first_name', 'Unknown'))
+                    logger.info(f"Chat: {name} (ID: {entity.id})")
+                 logger.info("--- Конец списка ---")
+             except Exception as e:
+                 logger.error(f"Error listing dialogs: {e}")
+             logger.info("Dialogs fetched successfully.")
         except Exception as e:
             logger.warning(f"Could not fetch dialogs: {e}")
 
