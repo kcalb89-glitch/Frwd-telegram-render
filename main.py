@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
 Main entry point for the Telegram Message Forwarder with multiple rules.
+Includes a simple HTTP server to keep Render happy.
 """
 
 import asyncio
 import logging
 import sys
 import os
-from telethon import TelegramClient, events
+import threading
+from flask import Flask
+from telethon import TelegramClient
 from telethon.sessions import StringSession
 
 from config import Config
 from forwarder import TelegramForwarder
-from db_handler import MessageTracker  # если используется общий трекер
+from db_handler import MessageTracker
 
 # Настройка логирования
 logging.basicConfig(
@@ -21,6 +24,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# --- HTTP-сервер для Render (чтобы был открытый порт) ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Telegram Forwarder is running."
+
+@app.route('/health')
+def health():
+    # Можно добавить проверку состояния бота, если нужно
+    return "OK", 200
+
+def run_web_server():
+    """Запускает Flask-сервер на порту из переменной окружения PORT."""
+    port = int(os.environ.get('PORT', 5000))
+    logger.info(f"Starting web server on port {port}")
+    app.run(host='0.0.0.0', port=port)
+
+# --- Основная асинхронная функция ---
 async def main():
     # Загружаем конфигурацию
     config = Config()
@@ -51,7 +73,7 @@ async def main():
     except Exception as e:
         logger.warning(f"Could not load initial dialogs: {e}")
 
-    # Создаём общий трекер (или можно создать отдельные, если нужно)
+    # Создаём общий трекер (или отдельные, если нужно)
     tracker = MessageTracker()
 
     # Создаём и запускаем форвардеры для каждого правила
@@ -63,15 +85,19 @@ async def main():
             source=rule['source'],
             destination=rule['destination'],
             filters=rule['filters'],
-            tracker=tracker,               # общий трекер
-            rate_limit_delay=config.rate_limit_delay  # можно передать индивидуально, если нужно
+            tracker=tracker,
+            rate_limit_delay=config.rate_limit_delay
         )
         await fwd.start_forwarding()
         forwarders.append(fwd)
 
     logger.info(f"Started {len(forwarders)} forwarders. Waiting for messages...")
 
-    # Держим клиент подключённым
+    # Запускаем HTTP-сервер в отдельном потоке (daemon=True, чтобы он завершился с программой)
+    web_thread = threading.Thread(target=run_web_server, daemon=True)
+    web_thread.start()
+
+    # Держим клиент подключённым (ждём отключения)
     await client.run_until_disconnected()
 
 if __name__ == "__main__":
