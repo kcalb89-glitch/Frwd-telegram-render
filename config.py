@@ -1,5 +1,6 @@
 """
 Configuration module for the Telegram Message Forwarder
+Supports multiple forwarding rules.
 """
 
 import os
@@ -13,52 +14,41 @@ class Config:
     
     def __init__(self, config_file='config.json'):
         self.config_file = config_file
+        # Общие настройки API и сессии
         self.api_id = None
         self.api_hash = None
-        self.source_channel = None
-        self.destination_channel = None
         self.session_string = None
-        self.text_filters = []
-        self.replacement_image_path = 'replacement_image.png'  # Using PNG image for better display in Telegram
-        self.rate_limit_delay = 3  # Seconds between messages to avoid flooding
-        self.always_replace_media = False  # Only replace media with captions or text
-        self.forward_all_messages = True  # Whether to forward all message types
-        self.replace_captioned_only = True  # Only replace images that have captions
+        # Список правил пересылки
+        self.rules = []
         
-        # Load configuration from environment variables or config file
+        # Параметры по умолчанию для отдельных правил (могут переопределяться)
+        self.replacement_image_path = 'replacement_image.png'
+        self.rate_limit_delay = 3
+        self.always_replace_media = False
+        self.forward_all_messages = True
+        self.replace_captioned_only = True
+        
+        # Загрузка конфигурации
         self._load_config()
+        self._load_rules()
     
     def _load_config(self):
-        """Load configuration from environment variables or config file"""
-        # Try to load from environment variables first
-        # Support both with and without TELEGRAM_ prefix for compatibility with Render
+        """Load API credentials and session string from environment or file"""
+        # Сначала загружаем общие параметры из переменных окружения
         self.api_id = os.getenv('TELEGRAM_API_ID') or os.getenv('API_ID')
         self.api_hash = os.getenv('TELEGRAM_API_HASH') or os.getenv('API_HASH')
-        self.source_channel = os.getenv('SOURCE_CHANNEL')
-        self.destination_channel = os.getenv('DESTINATION_CHANNEL')
         self.session_string = os.getenv('SESSION_STRING')
         
-        # If text filters are in env var, parse them
-        text_filters_env = os.getenv('TEXT_FILTERS')
-        if text_filters_env:
-            try:
-                self.text_filters = json.loads(text_filters_env)
-            except json.JSONDecodeError:
-                self.text_filters = text_filters_env.split(',')
-        
-        # If env vars are not set, try to load from config file
-        if not all([self.api_id, self.api_hash, self.source_channel, self.destination_channel]):
+        # Если не заданы в окружении, пробуем из файла
+        if not all([self.api_id, self.api_hash, self.session_string]):
             try:
                 if os.path.exists(self.config_file):
                     with open(self.config_file, 'r') as f:
                         config_data = json.load(f)
-                        
                     self.api_id = config_data.get('api_id', self.api_id)
                     self.api_hash = config_data.get('api_hash', self.api_hash)
-                    self.source_channel = config_data.get('source_channel', self.source_channel)
-                    self.destination_channel = config_data.get('destination_channel', self.destination_channel)
                     self.session_string = config_data.get('session_string', self.session_string)
-                    self.text_filters = config_data.get('text_filters', self.text_filters)
+                    # Также загружаем общие настройки
                     self.replacement_image_path = config_data.get('replacement_image_path', self.replacement_image_path)
                     self.rate_limit_delay = config_data.get('rate_limit_delay', self.rate_limit_delay)
                     self.always_replace_media = config_data.get('always_replace_media', self.always_replace_media)
@@ -66,58 +56,65 @@ class Config:
             except Exception as e:
                 logger.error(f"Error loading config file: {str(e)}")
     
+    def _load_rules(self):
+        """Load forwarding rules from environment variable RULES (JSON) or from old-style variables"""
+        rules_json = os.getenv('RULES')
+        if rules_json:
+            try:
+                rules_data = json.loads(rules_json)
+                if isinstance(rules_data, list):
+                    for rule in rules_data:
+                        # Проверяем наличие обязательных полей
+                        if 'source' in rule and 'destination' in rule:
+                            self.rules.append({
+                                'source': str(rule['source']),
+                                'destination': str(rule['destination']),
+                                'filters': rule.get('filters', '')
+                            })
+                    logger.info(f"Loaded {len(self.rules)} rules from RULES environment variable")
+                else:
+                    logger.error("RULES must be a JSON array")
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in RULES variable: {e}")
+        else:
+            # Поддержка старого формата (одно правило)
+            source = os.getenv('SOURCE_CHANNEL')
+            dest = os.getenv('DESTINATION_CHANNEL')
+            if source and dest:
+                # Получаем фильтры из TEXT_FILTERS (может быть строкой или JSON-списком)
+                filters = os.getenv('TEXT_FILTERS', '')
+                self.rules.append({
+                    'source': source,
+                    'destination': dest,
+                    'filters': filters
+                })
+                logger.info("Loaded single rule from legacy environment variables")
+    
+    def is_valid(self):
+        """Check if the configuration is valid"""
+        if not self.api_id or not self.api_hash or not self.session_string:
+            logger.error("Missing required API credentials or session string")
+            return False
+        if not self.rules:
+            logger.error("No forwarding rules defined")
+            return False
+        return True
+    
     def save(self):
-        """Save the current configuration to the config file"""
+        """Save configuration to file (optional)"""
         config_data = {
             'api_id': self.api_id,
             'api_hash': self.api_hash,
-            'source_channel': self.source_channel,
-            'destination_channel': self.destination_channel,
             'session_string': self.session_string,
-            'text_filters': self.text_filters,
             'replacement_image_path': self.replacement_image_path,
             'rate_limit_delay': self.rate_limit_delay,
             'always_replace_media': self.always_replace_media,
-            'forward_all_messages': self.forward_all_messages
+            'forward_all_messages': self.forward_all_messages,
+            'rules': self.rules
         }
-        
         try:
             with open(self.config_file, 'w') as f:
                 json.dump(config_data, f, indent=4)
             logger.info("Configuration saved successfully")
         except Exception as e:
             logger.error(f"Error saving config file: {str(e)}")
-    
-    def is_valid(self):
-        """Check if the configuration is valid"""
-        required_fields = [
-            ('api_id', self.api_id),
-            ('api_hash', self.api_hash),
-            ('source_channel', self.source_channel),
-            ('destination_channel', self.destination_channel)
-        ]
-        
-        for field_name, field_value in required_fields:
-            if not field_value:
-                logger.error(f"Missing required configuration: {field_name}")
-                return False
-        
-        return True
-    
-    def setup_interactive(self):
-        """Setup configuration interactively"""
-        print("=== Telegram Message Forwarder Configuration ===")
-        
-        self.api_id = input(f"Enter API ID ({self.api_id or 'not set'}): ") or self.api_id
-        self.api_hash = input(f"Enter API Hash ({self.api_hash or 'not set'}): ") or self.api_hash
-        self.source_channel = input(f"Enter Source Channel Username/ID ({self.source_channel or 'not set'}): ") or self.source_channel
-        self.destination_channel = input(f"Enter Destination Channel Username/ID ({self.destination_channel or 'not set'}): ") or self.destination_channel
-        
-        # Handle text filters
-        filters_input = input(f"Enter Text Filters (comma-separated) ({','.join(self.text_filters) if self.text_filters else 'not set'}): ")
-        if filters_input:
-            self.text_filters = [f.strip() for f in filters_input.split(',')]
-            
-        # Save the configuration
-        self.save()
-        print("Configuration saved successfully!")
